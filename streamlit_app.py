@@ -1,267 +1,90 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.express as px
 import plotly.graph_objects as go
-from data import DataImport
-from dico import tickers_brut
-from portfolio import PortfolioBuilder
-from performancemetrics import PortfolioPerformanceAnalyzer
 
-# Configuration de la page
+# Importer les fonctions de configuration
+from streamlit_config import (
+    load_data, create_portfolios, analyze_portfolios, 
+    show_portfolio_details, create_comparison_chart
+)
+
+#paramètres de l'application (nom de l'onglet et titre du projet)
 st.set_page_config(
-    page_title="Dashboard Portefeuilles ESG",
+    page_title="Projet Finance Verte",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# Fonction pour charger les données
-@st.cache_data
-def load_data():
-    # Chargement des tickers
-    tickers = list(tickers_brut.keys())
-    importer = DataImport(tickers)
-    
-    # Chargement des données ESG
-    df_esg = importer.fetch_esg_data()
-    
-    # Chargement des rendements
-    start_date = "2015-01-01"
-    end_date = (pd.Timestamp.today().normalize() + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
-    df_returns = importer.fetch_returns_data(start_date, end_date)
-    
-    return tickers, df_esg, df_returns
-
-# Fonction pour créer les portefeuilles
-@st.cache_data
-def create_portfolios(df_esg):
-    pb = PortfolioBuilder(df_esg)
-    portefeuille_environnement = pb.environnement()
-    portefeuille_social = pb.social()
-    portefeuille_esg = pb.ESG()
-    
-    # Préparation pour analyse
-    df_esg["ratingDate"] = pd.to_datetime(df_esg["ratingYear"].astype(str) + "-" + df_esg["ratingMonth"].astype(str) + "-01")
-    most_recent_date = df_esg["ratingDate"].max()
-    
-    # Création des dictionnaires de portefeuille au format attendu par l'analyseur
-    portfolios_to_analyze = []
-    
-    portfolios_data = {
-        "Environnement": portefeuille_environnement,
-        "Social": portefeuille_social, 
-        "ESG": portefeuille_esg
-    }
-    
-    for name, weights in portfolios_data.items():
-        portfolio_dict = {
-            "name": name,
-            "tickers": list(weights.keys()),
-            "weights": weights,
-            "investment_start_date": most_recent_date.strftime('%Y-%m') + "-01"
-        }
-        portfolios_to_analyze.append(portfolio_dict)
-    
-    return portfolios_data, portfolios_to_analyze
-
-# Fonction pour analyser les portefeuilles
-@st.cache_data
-def analyze_portfolios(portfolios_to_analyze):
-    analyzer = PortfolioPerformanceAnalyzer()
-    resultats = analyzer.analyze_portfolios(portfolios_to_analyze)
-    return resultats
-
-# Fonction pour créer un graphique des rendements cumulés
-def plot_cumulative_returns(df_returns, tickers, weights, title):
-    # Sélectionner les tickers du portefeuille
-    portfolio_returns = df_returns[tickers].copy()
-    
-    # Calculer les rendements pondérés
-    weighted_returns = pd.Series(0.0, index=portfolio_returns.index)
-    for ticker, weight in weights.items():
-        if ticker in portfolio_returns.columns:
-            weighted_returns += portfolio_returns[ticker] * weight
-    
-    # Calculer les rendements cumulés
-    cumulative_returns = (1 + weighted_returns).cumprod() - 1
-    
-    # Créer le graphique
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=cumulative_returns.index,
-        y=cumulative_returns.values * 100,  # Convertir en pourcentage
-        mode='lines',
-        name=title,
-        line=dict(width=2)
-    ))
-    
-    fig.update_layout(
-        title=f'Rendements cumulés - {title}',
-        xaxis_title='Date',
-        yaxis_title='Rendement cumulé (%)',
-        template='plotly_white',
-        height=500
-    )
-    
-    return fig
-
-# Fonction pour afficher les détails du portefeuille
-def show_portfolio_details(portfolio_name, weights, df_esg, df_returns, metrics):
-    st.header(f"Portefeuille {portfolio_name}")
-    
-    # Section 1: Répartition des poids
-    st.subheader("Composition du portefeuille")
-    fig_weights = px.pie(
-        values=list(weights.values()),
-        names=list(weights.keys()),
-        title=f"Répartition des actifs - {portfolio_name}"
-    )
-    st.plotly_chart(fig_weights, use_container_width=True)
-    
-    # Section 2: Tableau des actifs
-    st.subheader("Détails des actifs")
-    portfolio_tickers = list(weights.keys())
-    if portfolio_tickers:
-        portfolio_esg = df_esg[df_esg['Ticker'].isin(portfolio_tickers)][['Ticker', 'totalEsg', 'environmentScore', 'socialScore', 'governanceScore', 'peerGroup']]
-        st.dataframe(portfolio_esg.set_index('Ticker'), use_container_width=True)
-    
-    # Section 3: Graphique des rendements
-    st.subheader("Rendements")
-    fig_returns = plot_cumulative_returns(df_returns, portfolio_tickers, weights, portfolio_name)
-    st.plotly_chart(fig_returns, use_container_width=True)
-    
-    # Section 4: Métriques de performance
-    st.subheader("Métriques de performance")
-    
-    if metrics is not None and portfolio_name in metrics.index:
-        # Créer deux colonnes
-        col1, col2 = st.columns(2)
-        
-        # Préparer les données pour les tableaux
-        backtest_metrics = metrics.loc[portfolio_name, [col for col in metrics.columns if '_Backtest' in col]].reset_index()
-        backtest_metrics.columns = ['Métrique', 'Valeur']
-        backtest_metrics['Métrique'] = backtest_metrics['Métrique'].apply(lambda x: x.replace('_Backtest', ''))
-        
-        live_metrics = metrics.loc[portfolio_name, [col for col in metrics.columns if '_Live' in col]].reset_index()
-        live_metrics.columns = ['Métrique', 'Valeur']
-        live_metrics['Métrique'] = live_metrics['Métrique'].apply(lambda x: x.replace('_Live', ''))
-        
-        # Afficher les tableaux
-        with col1:
-            st.subheader("Métriques Backtest")
-            st.table(backtest_metrics.set_index('Métrique'))
-        
-        with col2:
-            st.subheader("Métriques Live")
-            st.table(live_metrics.set_index('Métrique'))
-    else:
-        st.warning("Aucune métrique disponible pour ce portefeuille.")
+st.title("Projet Finance Verte - Présentation de 3 portefeuilles ESG")
 
 
-# INTERFACE PRINCIPALE
-st.title("Dashboard de Portefeuilles ESG")
-
-# Chargement des données avec indication de progression
-with st.spinner('Chargement des données...'):
+with st.spinner('Chargement des données - Projet réalisé par Tristan Voirin, Axel Sottile et céline Nevo.'):
     tickers, df_esg, df_returns = load_data()
     portfolios_data, portfolios_to_analyze = create_portfolios(df_esg)
-    metrics = analyze_portfolios(portfolios_to_analyze)
+    metrics = analyze_portfolios(portfolios_to_analyze).rename_axis("Portefeuille")
 
-# Onglets principaux
+# on initie l'ensemble des onglets de l'interface
 tab_overview, tab_env, tab_social, tab_esg = st.tabs([
-    "📋 Présentation", 
+    "📋 Présentation du projet", 
     "🌿 Portefeuille Environnement", 
     "👪 Portefeuille Social", 
     "🌐 Portefeuille ESG"
 ])
 
-# Onglet Présentation
+#1er onglet : 
 with tab_overview:
-    st.header("Présentation des portefeuilles ESG")
-    
+    st.header("Présentation des portefeuilles ")
     st.write("""
-    Cette application présente trois portefeuilles construits selon différentes stratégies ESG :
-    
-    - **Portefeuille Environnement** : Focalisé sur les entreprises ayant de bonnes performances environnementales
-    - **Portefeuille Social** : Focalisé sur les entreprises ayant de bonnes performances sociales
-    - **Portefeuille ESG** : Équilibré entre les critères environnementaux, sociaux et de gouvernance
+    Cette application présente le résultat du projet de la matière Économie de l'énergie et de l'environnement dirigé par Jérémy Dudek. Ce projet a été réalisé par Céline Nevo, Axel Sottile et Tristan Voirin. Nous avons eu comme idée de créer trois portefeuilles se basant sur des critères extra-financiers. L'ensemble des données relatives aux performances ESG ont été récupérées grâce à la librairie Yahoo Finance.
+    \n
+    Les performances des portefeuilles ont été calculées sur deux périodes : 
+    - **Une période de backtest** : de 2015 au 1er avril 2025
+    - **Une période de test en direct** : du 1er avril 2025 à aujourd'hui. Cela permet de mesurer les performances du portefeuille depuis sa date d'investissement.
+    \n
+    Afin de construire ces portefeuilles, nous avons suivi une approche Best-in-Class à partir de 80 entreprises du S\&P 500, c'est-à-dire que nous avons sélectionné les entreprises qui performent le mieux dans la thématique correspondante par rapport à la moyenne des entreprises du même secteur. Par ailleurs, toutes les entreprises qui effectuent des tests sur les animaux ont été exclues de la sélection. Enfin, le portefeuille ESG combine les trois scores (Environnement, Social et Gouvernance) et inclut également un indicateur reflétant le positionnement ESG des entreprises par rapports à ses concurrents, en combinant les performances ESG actuelles avec les signaux d'engagement des entreprises. 
+    \n
+    Les performances du portefeuille Social sont accentuées car elles contiennent des parts de l'entreprise NVIDIA qui a connu une énorme croissances ces dernières années. Par ailleurs, les performances de l'investissement en direct sont relativement faibles à court terme car elles subissent le choc lié à l'incertitude autour de l'inflation et de la mise en place des droits de douanes par les États-Unis.
+    \n
+    Le programme calcule et stocke les rebalancements du portefeuille en fonction des évolutions des scores extra-financiers. Nous n'affichons sur streamlit que la dernière version des allocations du portefeuille. Toutefois, le calcul des performances intègre ces changements.
     """)
     
-    # Comparaison des rendements cumulés
-    st.subheader("Comparaison des performances")
-    
-    fig_comparison = go.Figure()
-    
-    for portfolio_name, weights in portfolios_data.items():
-        portfolio_tickers = list(weights.keys())
-        
-        # Calculer les rendements pondérés
-        portfolio_returns = df_returns[portfolio_tickers].copy()
-        weighted_returns = pd.Series(0.0, index=portfolio_returns.index)
-        for ticker, weight in weights.items():
-            if ticker in portfolio_returns.columns:
-                weighted_returns += portfolio_returns[ticker] * weight
-                
-        # Calculer les rendements cumulés
-        cumulative_returns = (1 + weighted_returns).cumprod() - 1
-        
-        # Ajouter au graphique
-        fig_comparison.add_trace(go.Scatter(
-            x=cumulative_returns.index,
-            y=cumulative_returns.values * 100,
-            mode='lines',
-            name=portfolio_name
-        ))
-    
-    fig_comparison.update_layout(
-        title='Comparaison des rendements cumulés',
-        xaxis_title='Date',
-        yaxis_title='Rendement cumulé (%)',
-        template='plotly_white',
-        height=500
-    )
-    
+    #On affiche les performances globales (évolution des rendements et des métriques clés)
+    st.subheader("Comparaison des performances des portefeuilles")
+    fig_comparison = create_comparison_chart(portfolios_data, df_returns)
     st.plotly_chart(fig_comparison, use_container_width=True)
     
-    # Tableau comparatif des métriques clés
-    st.subheader("Comparaison des métriques clés")
+
+
+    #Ici, on s'occupe de sélectionner les metrics importantes par rapport à la classe d'analyse de portefeuille
+    st.subheader("Comparaison des métriques clés")    
+    key_metrics = [
+        'Rendement Total (%)_Backtest', 
+        'Rendement Annualisé (%)_Backtest',
+        'Ratio de Sharpe_Backtest', 
+        'Drawdown Max (%)_Backtest',
+        'Rendement Total (%)_Live',
+        'Ratio de Sharpe_Live']
     
-    if not metrics.empty:
-        key_metrics = [
-            'Total Return (%)_Backtest', 
-            'Annualized Return (%)_Backtest',
-            'Sharpe Ratio_Backtest', 
-            'Max Drawdown (%)_Backtest',
-            'Total Return (%)_Live',
-            'Sharpe Ratio_Live'
-        ]
+    #j'ai refait un tableau parce que c'étiat plus simple que de remodifier la classe
+    selected_metrics = metrics[key_metrics].copy()
+    selected_metrics.columns = [
+        'Rendement Total (%) (Backtest)', 
+        'Rendement Annualisé (%) (Backtest)',
+        'Ratio de Sharpe (Backtest)', 
+        'Drawdown Max (%) (Backtest)',
+        'Rendement Total (%) (Direct)',
+        'Ratio de Sharpe (Direct)']
+    st.table(selected_metrics.round(2))
         
-        selected_metrics = metrics[key_metrics].copy()
-        # Renommer les colonnes pour plus de clarté
-        selected_metrics.columns = [
-            'Rendement Total (%) - Backtest', 
-            'Rendement Annualisé (%) - Backtest',
-            'Ratio de Sharpe - Backtest', 
-            'Drawdown Max (%) - Backtest',
-            'Rendement Total (%) - Live',
-            'Ratio de Sharpe - Live'
-        ]
-        
-        st.table(selected_metrics.round(2))
     
-# Onglet Environnement
+#mise en place des trois onglets
 with tab_env:
     show_portfolio_details("Environnement", portfolios_data["Environnement"], df_esg, df_returns, metrics)
-
-# Onglet Social
 with tab_social:
     show_portfolio_details("Social", portfolios_data["Social"], df_esg, df_returns, metrics)
-
-# Onglet ESG
 with tab_esg:
     show_portfolio_details("ESG", portfolios_data["ESG"], df_esg, df_returns, metrics)
 
-# Footer
+#pied de page
 st.markdown("---")
-st.caption("Dashboard développé pour visualiser les portefeuilles ESG et leurs performances")
+st.caption("Projet de comparaison de portefeuilles pour la matière Économie de l'énergie et de l'environnement - Réalisé par Axel Sottile, Céline Nevo et Tristan Voirin")
