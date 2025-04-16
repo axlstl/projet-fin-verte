@@ -17,18 +17,23 @@ We built three distinct portfolios:
 - Performance Analytics 
 - Interactive Dashboard
 
-
-[![Open in Streamlit]([https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://projet-fin-verte.streamlit.app/))
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://projet-fin-verte.streamlit.app/)
 
 ### How to run it on your own machine
-
-1. Install the requirements
+1. Clone the repository
+   
+   ```
+   git clone https://github.com/axlstl/projet-fin-verte.git
+   cd projet-fin-verte
+   ```
+   
+2. Install the requirements
 
    ```
    $ pip install -r requirements.txt
    ```
 
-2. Run the app
+3. Run the app
 
    ```
    $ streamlit run streamlit_app.py
