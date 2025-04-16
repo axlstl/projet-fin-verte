@@ -2,6 +2,8 @@
 
 This project presents a simple web app designed as part of the final assessment for the course *Économie de l'énergie et de l'environnement*, within the M1 Financial Engineering program at Université Paris-Dauphine. It evaluates the performance of ESG-based portfolios using data from Yahoo Finance.
 
+[Click here to open the app in your browser](https://projet-fin-verte.streamlit.app/)
+
 ##  Overview
 
 We built three distinct portfolios:
@@ -17,7 +19,7 @@ We built three distinct portfolios:
 - Performance Analytics 
 - Interactive Dashboard
 
-[Click here to open the app in your browser](https://projet-fin-verte.streamlit.app/)
+
 
 
 ### How to run it on your own machine
