@@ -17,7 +17,8 @@ We built three distinct portfolios:
 - Performance Analytics 
 - Interactive Dashboard
 
-[![Click here to open the app on your browser](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://projet-fin-verte.streamlit.app/)
+[Click here to open the app in your browser](https://projet-fin-verte.streamlit.app/)
+
 
 ### How to run it on your own machine
 1. Clone the repository
